@@ -6,7 +6,6 @@ import mongoose from "mongoose";
 import { scrapeUserTweets, scrapeSingleTweet } from "./scraper.js";
 
 
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/twitter_scraper";
@@ -43,6 +42,76 @@ const ArticleSchema = new mongoose.Schema(
 const Article = mongoose.model("Article", ArticleSchema);
 
 // --- API Routes ---
+
+app.get("/user-tweets", async (req, res) => {
+  const username = req.query.username;
+  if (!username) {
+    return res
+      .status(400)
+      .json({ error: "Username query parameter is required." });
+  }
+
+  try {
+    const tweets = await scrapeUserTweets(username);
+
+    const savedArticles = [];
+    const skippedDuplicates = [];
+    const skippedInvalid = [];
+
+    for (const tweet of tweets) {
+      try {
+        // Always build the tweet link as url
+        if (!tweet.id) {
+          console.warn("⚠️ Skipping tweet with no ID:", tweet);
+          skippedInvalid.push(tweet);
+          continue;
+        }
+
+        const tweetUrl = `https://twitter.com/${username}/status/${tweet.id}`;
+
+        // Check for duplicate
+        const exists = await Article.findOne({ url: tweetUrl });
+        if (exists) {
+          skippedDuplicates.push(tweetUrl);
+          continue;
+        }
+
+        // Create new article
+        const article = new Article({
+          title: tweet.text?.slice(0, 100) || "Untitled",
+          summary: tweet.text?.slice(0, 200) || "",
+          body: tweet.text,
+          url: tweetUrl, // ✅ always stored as Twitter link
+          source: username,
+          isCreatedBy: "twitter_scraper",
+          publishedAt: tweet.date ? new Date(tweet.date) : new Date(),
+          media: tweet.media || [],
+        });
+
+        await article.save();
+        savedArticles.push(article);
+      } catch (err) {
+        console.error("⚠️ Error saving tweet:", err.message);
+      }
+
+      await delay(300); // avoid overload
+    }
+
+    res.json({
+      username,
+      savedCount: savedArticles.length,
+      skippedDuplicatesCount: skippedDuplicates.length,
+      skippedInvalidCount: skippedInvalid.length,
+      savedArticles,
+      skippedDuplicates,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch tweets." });
+  }
+});
+
+
 
 // Route to scrape a user's timeline
 app.get("/scrape-user", async (req, res) => {
@@ -102,7 +171,7 @@ app.get("/scrape-post", async (req, res) => {
             body: tweet.text,
             url: tweet.url,
             source: username,
-            isCreatedBy: "twitter_scraper_single",
+            isCreatedBy: "twitter_scraper",
             publishedAt: tweet.publishedAt ? new Date(tweet.publishedAt) : new Date(),
             media: mediaData,
         });
