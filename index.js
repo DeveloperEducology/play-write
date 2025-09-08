@@ -2,12 +2,10 @@
 import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
-import dotenv from "dotenv";
 // Import both scraper functions
 import { scrapeUserTweets, scrapeSingleTweet } from "./scraper.js";
 
-// Load environment variables
-dotenv.config();
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
