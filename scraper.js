@@ -1,5 +1,5 @@
-// scraper.js
 import { chromium } from "playwright";
+import fs from "fs";
 
 export async function scrapeTwitter(query) {
   const browser = await chromium.launch({
@@ -12,26 +12,37 @@ export async function scrapeTwitter(query) {
     ]
   });
 
-  const page = await browser.newPage();
+  const context = fs.existsSync("storageState.json")
+    ? await browser.newContext({ storageState: "storageState.json" })
+    : await browser.newContext();
 
-  const url = `https://twitter.com/search?q=${encodeURIComponent(query)}&src=typed_query`;
+  const page = await context.newPage();
+  const url = `https://twitter.com/search?q=${encodeURIComponent(query)}&src=typed_query&f=live`; // live/latest tweets
 
-  await page.goto(url, { waitUntil: "domcontentloaded" });
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
 
-  // Wait for at least one tweet
-  await page.waitForSelector("article");
+  // Wait for first tweets to load
+  await page.waitForSelector("article", { timeout: 60000 });
 
-  // Scroll a few times to load more tweets
-  for (let i = 0; i < 5; i++) {
-    await page.evaluate(() => window.scrollBy(0, window.innerHeight));
-    await page.waitForTimeout(2000);
-  }
+  // Extract only the visible tweets
+  const tweets = await page.$$eval("article", (articles) =>
+    articles.map((article) => {
+      const textNode = article.querySelector("div[lang]");
+      const text = textNode ? textNode.innerText : "";
 
-  // Extract tweet texts
-  const tweets = await page.$$eval("article div[lang]", nodes =>
-    nodes.map(n => n.innerText)
+      const anchor = article.querySelector("a[href*='/status/']");
+      const link = anchor ? "https://twitter.com" + anchor.getAttribute("href") : "";
+
+      const imgNode = article.querySelector("img[src*='twimg']");
+      const image = imgNode ? imgNode.src : null;
+
+      const timeNode = article.querySelector("time");
+      const publishedAt = timeNode ? timeNode.getAttribute("datetime") : null;
+
+      return { text, link, image, publishedAt };
+    })
   );
 
   await browser.close();
-  return tweets.slice(0, 20); // Return first 20
+  return tweets.slice(0, 20); // only first 20 latest tweets
 }
