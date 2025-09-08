@@ -1,25 +1,26 @@
-// index.js
 import express from "express";
-import { scrapeTwitter } from "./scraper.js";
+import cors from "cors";
+import { scrapeUserTweets } from "./scraper.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get("/", (req, res) => {
-  res.send("✅ Twitter Scraper API running");
-});
+app.use(cors());
+app.use(express.json());
 
-app.get("/scrape", async (req, res) => {
+app.get("/user-tweets", async (req, res) => {
+  const username = req.query.username;
+  if (!username) return res.status(400).json({ error: "Username query parameter is required." });
+
   try {
-    const query = req.query.q || "playwright";
-    const tweets = await scrapeTwitter(query);
-    res.json({ query, tweets });
+    const tweets = await scrapeUserTweets(username);
+    res.json({ username, tweets });
   } catch (err) {
-    console.error("❌ Error:", err);
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch tweets." });
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-});
+app.get("/", (req, res) => res.send("Twitter scraper running ✅"));
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

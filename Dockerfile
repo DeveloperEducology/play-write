@@ -1,17 +1,20 @@
-FROM mcr.microsoft.com/playwright:focal
+# Base image with Playwright & Chromium
+FROM mcr.microsoft.com/playwright:v1.55.0-focal
 
-# Create app directory
+# Set working directory
 WORKDIR /app
 
+# Copy package files
+COPY package*.json ./
+
 # Install dependencies
-COPY package.json ./
 RUN npm install
 
-# Copy app files
+# Copy source code
 COPY . .
 
-# Expose port
+# Expose the port
 EXPOSE 3000
 
-# Start app
-CMD ["npm", "start"]
+# Run the server
+CMD ["node", "index.js"]
