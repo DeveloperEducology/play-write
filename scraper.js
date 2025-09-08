@@ -4,8 +4,6 @@ import fs from "fs";
 
 const STORAGE_PATH = "/run/secrets/storageState.json"; // secret file in Render
 
-// Use environment variable for production, fallback to local file for development
-const STORAGE_PATH = process.env.STORAGE_STATE_PATH || "/run/secrets/storageState.json"; // secret file in Render
 
 const launchBrowser = () => chromium.launch({
     headless: true,
