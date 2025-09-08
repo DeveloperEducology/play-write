@@ -1,5 +1,5 @@
 # Base image with Playwright & Chromium
-FROM mcr.microsoft.com/playwright:v1.55.0-focal
+FROM mcr.microsoft.com/playwright:v1.55.0-noble
 
 # Set working directory
 WORKDIR /app
