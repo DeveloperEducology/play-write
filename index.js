@@ -1,10 +1,12 @@
-// server.js
 import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
+import dotenv from "dotenv";
 // Import both scraper functions
 import { scrapeUserTweets, scrapeSingleTweet } from "./scraper.js";
 
+// Load environment variables
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -41,110 +43,97 @@ const ArticleSchema = new mongoose.Schema(
 
 const Article = mongoose.model("Article", ArticleSchema);
 
+// --- Utility ---
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // --- API Routes ---
 
-app.get("/user-tweets", async (req, res) => {
-  const username = req.query.username;
-  if (!username) {
-    return res
-      .status(400)
-      .json({ error: "Username query parameter is required." });
-  }
-
-  try {
-    const tweets = await scrapeUserTweets(username);
-
-    const savedArticles = [];
-    const skippedDuplicates = [];
-    const skippedInvalid = [];
-
-    for (const tweet of tweets) {
-      try {
-        // Always build the tweet link as url
-        if (!tweet.id) {
-          console.warn("⚠️ Skipping tweet with no ID:", tweet);
-          skippedInvalid.push(tweet);
-          continue;
-        }
-
-        const tweetUrl = `https://twitter.com/${username}/status/${tweet.id}`;
-
-        // Check for duplicate
-        const exists = await Article.findOne({ url: tweetUrl });
-        if (exists) {
-          skippedDuplicates.push(tweetUrl);
-          continue;
-        }
-
-        // Create new article
-        const article = new Article({
-          title: tweet.text?.slice(0, 100) || "Untitled",
-          summary: tweet.text?.slice(0, 200) || "",
-          body: tweet.text,
-          url: tweetUrl, // ✅ always stored as Twitter link
-          source: username,
-          isCreatedBy: "twitter_scraper",
-          publishedAt: tweet.date ? new Date(tweet.date) : new Date(),
-          media: tweet.media || [],
-        });
-
-        await article.save();
-        savedArticles.push(article);
-      } catch (err) {
-        console.error("⚠️ Error saving tweet:", err.message);
-      }
-
-      await delay(300); // avoid overload
-    }
-
-    res.json({
-      username,
-      savedCount: savedArticles.length,
-      skippedDuplicatesCount: skippedDuplicates.length,
-      skippedInvalidCount: skippedInvalid.length,
-      savedArticles,
-      skippedDuplicates,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch tweets." });
-  }
-});
-
-
-
-// Route to scrape a user's timeline
+// ✅ --- CORRECTED ROUTE TO SCRAPE A USER'S TIMELINE --- ✅
 app.get("/scrape-user", async (req, res) => {
-    // ... (this is your existing user tweets endpoint - no changes needed here)
     const { username } = req.query;
     if (!username) {
         return res.status(400).json({ error: "Username query parameter is required." });
     }
+
     try {
         const tweets = await scrapeUserTweets(username);
-        // ... rest of the logic to save multiple tweets
-        res.json({ message: `Scraping for ${username} complete.`, data: tweets });
+
+        const savedArticles = [];
+        const skippedDuplicates = [];
+        const skippedInvalid = [];
+
+        for (const tweet of tweets) {
+            // Validate that the tweet has a URL, which is our unique identifier
+            if (!tweet.url) {
+                console.warn("⚠️ Skipping tweet with no URL:", tweet);
+                skippedInvalid.push(tweet);
+                continue;
+            }
+
+            try {
+                // Check for duplicate using the unique tweet URL
+                const exists = await Article.findOne({ url: tweet.url });
+                if (exists) {
+                    skippedDuplicates.push(tweet.url);
+                    continue;
+                }
+
+                // **FIXED:** Correctly format the media array from tweet.image
+                const mediaData = tweet.image
+                    ? [{ mediaType: "image", url: tweet.image }]
+                    : [];
+
+                // Create new article
+                const article = new Article({
+                    title: tweet.text.slice(0, 100),
+                    summary: tweet.text.slice(0, 200),
+                    body: tweet.text,
+                    url: tweet.url, // Use the reliable URL from the scraper
+                    source: username,
+                    isCreatedBy: "twitter_scraper_user",
+                    // **FIXED:** Use 'publishedAt' from scraper, not 'date'
+                    publishedAt: tweet.publishedAt ? new Date(tweet.publishedAt) : new Date(),
+                    media: mediaData,
+                });
+
+                await article.save();
+                savedArticles.push(article);
+
+            } catch (err) {
+                console.error(`⚠️ Error saving tweet ${tweet.id}:`, err.message);
+            }
+            await delay(200); // Small delay to be polite to the DB
+        }
+
+        res.json({
+            message: `Scraping for ${username} complete.`,
+            savedCount: savedArticles.length,
+            skippedDuplicatesCount: skippedDuplicates.length,
+            skippedInvalidCount: skippedInvalid.length,
+            savedArticles,
+            skippedDuplicates,
+        });
+
     } catch (err) {
-        res.status(500).json({ error: "Failed to fetch user tweets.", details: err.message });
+        console.error(`❌ Failed to fetch tweets for ${username}:`, err);
+        res.status(500).json({ error: "Failed to fetch or process user tweets.", details: err.message });
     }
 });
 
 
-// ✨ --- NEW API ENDPOINT TO SCRAPE A SINGLE POST --- ✨
+// ✅ --- CORRECTED ROUTE TO SCRAPE A SINGLE POST --- ✅
 app.get("/scrape-post", async (req, res) => {
     const { url } = req.query;
     if (!url) {
         return res.status(400).json({ error: "URL query parameter is required." });
     }
 
-    // Basic URL validation
     const twitterStatusRegex = /^https?:\/\/(twitter|x)\.com\/[a-zA-Z0-9_]+\/status\/[0-9]+/;
     if (!twitterStatusRegex.test(url)) {
         return res.status(400).json({ error: "Invalid Twitter/X post URL provided." });
     }
 
     try {
-        // Check if the article already exists in the DB
         const existingArticle = await Article.findOne({ url });
         if (existingArticle) {
             return res.status(200).json({
@@ -154,14 +143,12 @@ app.get("/scrape-post", async (req, res) => {
             });
         }
 
-        // If it doesn't exist, scrape it
         const tweet = await scrapeSingleTweet(url);
 
         if (!tweet) {
             return res.status(404).json({ error: "Could not find or scrape the specified post." });
         }
 
-        // Save the new article to the database
         const mediaData = tweet.image ? [{ mediaType: "image", url: tweet.image }] : [];
         const username = url.match(/(?:twitter|x)\.com\/(.*?)\/status/)[1] || 'unknown';
 
@@ -171,7 +158,7 @@ app.get("/scrape-post", async (req, res) => {
             body: tweet.text,
             url: tweet.url,
             source: username,
-            isCreatedBy: "twitter_scraper",
+            isCreatedBy: "twitter_scraper_single",
             publishedAt: tweet.publishedAt ? new Date(tweet.publishedAt) : new Date(),
             media: mediaData,
         });
@@ -194,3 +181,4 @@ app.get("/scrape-post", async (req, res) => {
 app.get("/", (req, res) => res.send("Twitter scraper is running ✅"));
 
 app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
+
