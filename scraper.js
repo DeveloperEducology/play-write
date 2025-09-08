@@ -16,7 +16,7 @@ export async function scrapeUserTweets(username) {
   });
 
   const context = fs.existsSync("storageState.json")
-    ? await browser.newContext({ storageState: STORAGE_PATH })
+    ? await browser.newContext({ storageState: "storageState.json" })
     : await browser.newContext();
 
   const page = await context.newPage();
