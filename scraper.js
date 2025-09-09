@@ -22,7 +22,7 @@ export async function scrapeUserTweets(username) {
         : await browser.newContext();
 
     const page = await context.newPage();
-    const url = `https://x.com/${username}`;
+    const url = `https://twitter.com/${username}`;
 
     console.log(`Navigating to ${url}...`);
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
@@ -41,7 +41,7 @@ export async function scrapeUserTweets(username) {
             const text = textNode ? textNode.innerText : "";
 
             const anchor = Array.from(article.querySelectorAll("a")).find(a => a.href.includes('/status/'));
-            const url = anchor ? anchor.href : "";
+            const url = anchor ? "https://twitter.com" + anchor.getAttribute("href") : "";
 
             const imgNode = article.querySelector('div[data-testid="tweetPhoto"] img');
             const image = imgNode ? imgNode.src : null;
