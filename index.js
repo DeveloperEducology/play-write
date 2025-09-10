@@ -427,7 +427,7 @@ app.get("/scrape-user", async (req, res) => {
           body: tweet.text,
           url: tweet.url,
           source: username,
-          isCreatedBy: "twitter_scraper_user",
+          isCreatedBy: "twitter_scraper",
           publishedAt: tweet.publishedAt
             ? new Date(tweet.publishedAt)
             : new Date(),
