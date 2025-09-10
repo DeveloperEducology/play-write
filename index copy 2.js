@@ -58,6 +58,7 @@ const ArticleSchema = new mongoose.Schema(
 
 const Article = mongoose.model("Article", ArticleSchema);
 
+
 // --- TELUGU SUMMARY HELPER FUNCTION ---
 async function summarizeTeluguNews(teluguText) {
   if (!teluguText) return null;
@@ -111,11 +112,11 @@ app.post("/summarize-telugu", async (req, res) => {
     });
   } catch (err) {
     console.error("❌ Error in /summarize-telugu route:", err);
-    res
-      .status(500)
-      .json({ error: "Something went wrong.", details: err.message });
+    res.status(500).json({ error: "Something went wrong.", details: err.message });
   }
 });
+
+
 
 // --- NEW: TELUGU TITLE GENERATION HELPER ---
 async function generateTeluguTitle(teluguText) {
@@ -143,9 +144,7 @@ ${teluguText}
 app.post("/create-news", async (req, res) => {
   const { text } = req.body;
   if (!text || text.trim().length < 20) {
-    return res
-      .status(400)
-      .json({ error: "A substantial amount of Telugu text is required." });
+    return res.status(400).json({ error: "A substantial amount of Telugu text is required." });
   }
 
   try {
@@ -157,13 +156,9 @@ app.post("/create-news", async (req, res) => {
 
     // Check if essential components were generated
     if (!title || !summary) {
-      return res
-        .status(500)
-        .json({
-          error: "Failed to generate essential content (title or summary).",
-        });
+      return res.status(500).json({ error: "Failed to generate essential content (title or summary)." });
     }
-
+    
     // 2. Create the new article object
     const newArticle = new Article({
       title: title,
@@ -186,14 +181,10 @@ app.post("/create-news", async (req, res) => {
       message: "Successfully created and saved the new article.",
       article: newArticle,
     });
+
   } catch (err) {
     console.error("❌ Error in /create-from-text route:", err);
-    res
-      .status(500)
-      .json({
-        error: "An internal server error occurred.",
-        details: err.message,
-      });
+    res.status(500).json({ error: "An internal server error occurred.", details: err.message });
   }
 });
 // --- Utility ---
@@ -411,10 +402,10 @@ app.get("/scrape-user", async (req, res) => {
         }
 
         const summarizedContent = await summarizeTweetWithGemini(tweet.text);
-
+        
         // ✨ FIX: Handle the 'images' array from the scraper
         const mediaData = tweet.images
-          ? tweet.images.map((imgUrl) => ({ mediaType: "image", url: imgUrl }))
+          ? tweet.images.map(imgUrl => ({ mediaType: "image", url: imgUrl }))
           : [];
 
         const article = new Article({
@@ -498,19 +489,10 @@ app.get("/scrape-post", async (req, res) => {
     const teluguContent = await generateTeluguNews(tweet.text);
 
     // ✨ FIX: Handle the 'images' array from the scraper
-    const mediaData = [];
-    if (tweet.images && tweet.images.length > 0) {
-      tweet.images.forEach((url) =>
-        mediaData.push({ mediaType: "image", url })
-      );
-    }
-    if (tweet.videos && tweet.videos.length > 0) {
-      // This will now correctly populate with video poster URLs
-      tweet.videos.forEach((url) =>
-        mediaData.push({ mediaType: "video_post", url })
-      );
-    }
-
+    const mediaData = tweet.images
+      ? tweet.images.map(imgUrl => ({ mediaType: "image", url: imgUrl }))
+      : [];
+      
     const username =
       url.match(/(?:twitter|x)\.com\/(.*?)\/status/)[1] || "unknown";
 

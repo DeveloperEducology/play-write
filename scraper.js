@@ -67,7 +67,7 @@ export async function scrapeUserTweets(username) {
     return tweets.slice(0, 20);
 }
 
-// ✨ --- NEW FUNCTION TO SCRAPE A SINGLE POST --- ✨
+// ✨ --- IMPROVED FUNCTION TO SCRAPE A SINGLE POST WITH MULTIPLE MEDIA --- ✨
 export async function scrapeSingleTweet(tweetUrl) {
     const browser = await launchBrowser();
     const context = fs.existsSync(STORAGE_PATH)
@@ -87,13 +87,13 @@ export async function scrapeSingleTweet(tweetUrl) {
             const textNode = article.querySelector('div[data-testid="tweetText"]');
             const text = textNode ? textNode.innerText : "";
 
-            const imgNode = article.querySelector('div[data-testid="tweetPhoto"] img');
-            const image = imgNode ? imgNode.src : null;
+            const imgNodes = article.querySelectorAll('div[data-testid="tweetPhoto"] img');
+            const images = Array.from(imgNodes).map(img => img.src);
 
             const timeNode = article.querySelector("time");
             const publishedAt = timeNode ? timeNode.getAttribute("datetime") : null;
 
-            return { text, image, publishedAt };
+            return { text, images, publishedAt };
         });
 
         // Extract ID from the URL
@@ -116,4 +116,4 @@ export async function scrapeSingleTweet(tweetUrl) {
         await browser.close();
         return null;
     }
-}
+}   
